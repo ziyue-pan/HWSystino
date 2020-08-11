@@ -20,6 +20,7 @@ function main() {
         $(mysql -u $mysql_username -p$mysql_password -e ";")
 
         if [ $? -eq 0 ]; then
+            mysql_info=" -u$mysql_username -p$mysql_password"
             break
         else
             zenity --error --title "Wrong Username or Password" $zenity_size \
@@ -63,7 +64,23 @@ function main() {
 }
 
 function Initial() {
-    echo "Initial Done"
+    init_file="$PWD/init.sql"
+    if [ -e $init_file ]; then
+        mysql -u $mysql_username -p$mysql_password <$init_file
+
+        if [ $? -eq 0 ]; then
+            echo "initialization done!"
+        else
+            zenity --error --title "Fail to Initialize Database" \
+                $zenity_size --text "Please check your init.sql script."
+            exit 1
+        fi
+
+    else
+        zenity --error --title "Fail to Initialize Database" \
+            $zenity_size --text "Cannot find file: $init_file"
+        exit 1
+    fi
 
 }
 
@@ -73,9 +90,15 @@ function LoginAdmin() {
     if [ $? -eq 0 ]; then
         admin_username=$(echo $entry | cut -d'|' -f1)
         admin_password=$(echo $entry | cut -d'|' -f2)
-        echo $admin_username
-        echo $admin_password
-        result=$(mysql -s -N)
+
+        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(admin_id) FROM admin WHERE admin_id='$admin_username' AND password='$admin_password'")
+
+        if [ $result -eq 1 ]; then
+            echo "successfully login in as administrator"
+        else
+            zenity --error --title "Fail to Login in as Administrator" \
+                $zenity_size --text "Wrong matches! Please re-check your username or password"
+        fi
     fi
 }
 
@@ -83,10 +106,17 @@ function LoginTeacher() {
     entry=$(zenity --title "Login As Teacher" --password --username)
 
     if [ $? -eq 0 ]; then
-        teacher_username=$(echo $entry | cut -d'|' -f1)
-        teacher_password=$(echo $entry | cut -d'|' -f2)
-        echo $teacher_username
-        echo $teacher_password
+        admin_username=$(echo $entry | cut -d'|' -f1)
+        admin_password=$(echo $entry | cut -d'|' -f2)
+
+        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(admin_id) FROM admin WHERE admin_id='$admin_username' AND password='$admin_password'")
+
+        if [ $result -eq 1 ]; then
+            echo "successfully login in as teacher"
+        else
+            zenity --error --title "Fail to Login in as Teacher" \
+                $zenity_size --text "Wrong matches! Please re-check your username or password"
+        fi
     fi
 }
 
@@ -96,8 +126,15 @@ function LoginStudent() {
     if [ $? -eq 0 ]; then
         student_username=$(echo $entry | cut -d'|' -f1)
         student_password=$(echo $entry | cut -d'|' -f2)
-        echo $student_username
-        echo $student_password
+
+        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(student_id) FROM student WHERE student_id='$student_username' AND password='$student_password'")
+
+        if [ $result -eq 1 ]; then
+            echo "successfully login in as student"
+        else
+            zenity --error --title "Fail to Login in as Student" \
+                $zenity_size --text "Wrong matches! Please re-check your username or password"
+        fi
     fi
 }
 
