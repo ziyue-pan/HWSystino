@@ -1,53 +1,31 @@
 #! /bin/bash
 
 # 临时变量声明
+zenity_size=" --height 160 --width 320 "
 temp1=$(mktemp -t temp1.XXXXXX)
 
 # 前向函数声明
 function main() {
 
-    login_flag=0
-
-    while [ $login_flag == 0 ]; do
+    while [ 1 ]; do
         mysql_entry=$(zenity --title "Login In Your MySQL" --password --username)
 
-        if [ $? -eq 0]; then
+        if [ $? -eq 0 ]; then
             mysql_username=$(echo $mysql_entry | cut -d'|' -f1)
             mysql_password=$(echo $mysql_entry | cut -d'|' -f2)
         else
             exit 0
         fi
 
-        if [ ! $(mysql -u $mysql_username -p$mysql_password -e ";") ]; then
-            login_flag=1
+        $(mysql -u $mysql_username -p$mysql_password -e ";")
+
+        if [ $? -eq 0 ]; then
+            break
         else
-            zenity --error --title "Wrong Username or Password" \
-            --text "Cannot connect to your MySQL system. Please try again."
+            zenity --error --title "Wrong Username or Password" $zenity_size \
+                --text "Cannot connect to your MySQL system. Please try again."
         fi
     done
-
-    mysql_entry=$(zenity --title "Login In Your MySQL" --password --username)
-
-    # if [ $? -eq 0 ]; then
-    #     mysql_username=$(echo $mysql_entry | cut -d'|' -f1)
-    #     mysql_password=$(echo $mysql_entry | cut -d'|' -f2)
-
-    #     mysql -u$mysql_username -p$mysql_password -e
-
-    #     if [ $? -eq 0 ]; then
-    #         echo "success".
-    #         exit 0
-    #     else
-    #         echo "fail".
-    #         exit 0
-    #     fi
-
-    #     # mysql_db=$(mysql -u$mysql_username -p$mysql_password HW)
-    #     # mysql_op=$(mysql -N HW -u$mysql_username -p$mysql_password)
-    #     # result=$(mysql -s -N)
-    # else
-    #     exit 0
-    # fi
 
     Initial
     while [ 1 ]; do
