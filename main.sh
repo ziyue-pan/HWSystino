@@ -1,6 +1,7 @@
 #! /bin/bash
 
 # 临时变量声明
+form_size="--height 200 --width 400 "
 error_size=" --height 160 --width 320 "
 list_size=" --height 640 --width 480 "
 
@@ -33,16 +34,18 @@ function main() {
 
     while [ 1 ]; do
 
-        selection=$(zenity --list --title "Choose Your Identity" \
-            --cancel-label Quit \
-            --column "Identity" \
-            "Administrator" \
-            "Teacher" \
-            "Student")
+        form=$(yad --form --title "Login As Your Chosen Identity" \
+            --text "Enter your account and choose an identity" \
+            $form_size --field="Username" --field="Password:H" \
+            --field="Identity:CB" '' '' 'Administrator!Teacher!Student')
 
-        if [ $? -eq 1 ]; then
+        if [ -z $form ]; then
             break
         fi
+
+        username=$(echo $form | cut -d'|' -f1)
+        password=$(echo $form | cut -d'|' -f2)
+        selection=$(echo $form | cut -d'|' -f3)
 
         case $selection in
         "Administrator")
@@ -86,22 +89,17 @@ function Initial() {
 }
 
 function LoginAdmin() {
-    entry=$(zenity --title "Login As Administrator" --password --username)
 
-    if [ $? -eq 0 ]; then
-        admin_username=$(echo $entry | cut -d'|' -f1)
-        admin_password=$(echo $entry | cut -d'|' -f2)
+    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(admin_id) FROM admin WHERE admin_id='$username' AND password='$password'")
 
-        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(admin_id) FROM admin WHERE admin_id='$admin_username' AND password='$admin_password'")
-
-        if [ $result -eq 1 ]; then
-            echo "successfully login in as administrator"
-            DisplayAdminMenu
-        else
-            Err "Fail to Login in as Administrator" \
-                "Wrong matches! Please re-check your username or password"
-        fi
+    if [ $result -eq 1 ]; then
+        echo "successfully login in as administrator"
+        DisplayAdminMenu
+    else
+        Err "Fail to Login in as Administrator" \
+            "Wrong matches! Please re-check your username or password"
     fi
+
 }
 
 function LoginTeacher() {
@@ -192,7 +190,40 @@ function ManageTeacherAccounts() {
 
         case $? in
         0)
-            echo "modify"
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select an account"
+                continue
+            fi
+
+            cur_id=$(echo "$selection" | cut -d '|' -f 1)
+            cur_pass=$(echo "$selection" | cut -d '|' -f 2)
+            cur_name=$(echo "$selection" | cut -d '|' -f 3)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$cur_id'")
+
+            if [ $result -ne 1 ]; then
+                Err "Fail to Modify Account" \
+                    "Cannot find a teacher account whose ID is '$cur_id'"
+                continue
+            fi
+
+            form=$(yad --form --title "Modify Teacher Account" \
+                --text "Modify a teacher account" \
+                --field="Teacher ID" "$cur_id" \
+                --field="Password" "$cur_pass" \
+                --field="Name" "$cur_name" $form_size)
+
+            if [ -z $form ]; then
+                continue
+            fi
+
+            new_id=$(echo "$form" | cut -d '|' -f 1)
+            new_pass=$(echo "$form" | cut -d '|' -f 2)
+            new_name=$(echo "$form" | cut -d '|' -f 3)
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            UPDATE teacher SET teacher_id='$new_id', password='$new_pass', name='$new_name' WHERE teacher_id='$cur_id';
+EOF
             ;;
 
         1)
@@ -260,7 +291,6 @@ EOF
         esac
 
     done
-
 }
 
 function ManageCourses() {
