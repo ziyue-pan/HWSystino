@@ -209,7 +209,7 @@ function ManageTeacherAccounts() {
 
             form=$(yad --form --title "Modify Teacher Account" \
                 --text "Modify a teacher account" \
-                --field="Teacher ID" "$cur_id" \
+                --field="Teacher ID:RO" "$cur_id" \
                 --field="Password" "$cur_pass" \
                 --field="Name" "$cur_name" $form_size)
 
@@ -217,14 +217,10 @@ function ManageTeacherAccounts() {
                 continue
             fi
 
-            new_id=$(echo "$form" | cut -d '|' -f 1)
             new_pass=$(echo "$form" | cut -d '|' -f 2)
             new_name=$(echo "$form" | cut -d '|' -f 3)
 
-            if [ ${#new_id} -gt 10 ]; then
-                Err "Fail to Modify Teacher Account" "Teacher ID is too long. Expected under or equal 10 characters."
-                continue
-            elif [ ${#new_pass} -gt 32 ]; then
+            if [ ${#new_pass} -gt 32 ]; then
                 Err "Fail to Modify Teacher Account" "Password is too long. Expected under or equal 32 characters."
                 continue
             elif [ ${#new_name} -gt 40 ]; then
@@ -232,13 +228,12 @@ function ManageTeacherAccounts() {
                 continue
             fi
 
-            if [[ -n $new_id ]] && [[ -n $new_pass ]] && [[ -n $new_name ]]; then
+            if [[ -n $new_pass ]] && [[ -n $new_name ]]; then
                 mysql -u $mysql_username -p$mysql_password HW <<EOF
-                UPDATE teacher SET teacher_id='$new_id', password='$new_pass', name='$new_name' WHERE teacher_id='$cur_id';
+                UPDATE teacher SET password='$new_pass', name='$new_name' WHERE teacher_id='$cur_id';
 EOF
 
             else
-
                 Err "Fail to Modify Teacher Account" "All the entries in the form should be non-empty."
 
             fi
@@ -290,16 +285,10 @@ EOF
 
             delete_id=$(echo "$selection" | cut -d '|' -f 1)
 
-            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$delete_id'")
-
-            if [ $result -eq 1 ]; then
-                mysql -u $mysql_username -p$mysql_password HW <<EOF
-                DELETE FROM teacher WHERE teacher_id=$delete_id;
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM teacher WHERE teacher_id=$delete_id;
+            DELETE FROM binding WHERE teacher_id=$delete_id;
 EOF
-            else
-                Err "Fail to Delete Account" \
-                    "Cannot find a teacher account whose ID is '$delete_id'"
-            fi
             ;;
         *)
             break
@@ -336,7 +325,7 @@ function ManageCourses() {
 
             form=$(yad --form --title "Modify Course" \
                 --text "Modify a course" \
-                --field="Course ID" "$cur_id" \
+                --field="Course ID:RO" "$cur_id" \
                 --field="Name" "$cur_name" $form_size)
 
             if [ -z $form ]; then
@@ -407,27 +396,103 @@ EOF
 
             delete_id=$(echo "$selection" | cut -d '|' -f 1)
 
-            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(course_id) FROM course WHERE course_id='$delete_id'")
-
-            if [ $result -eq 1 ]; then
-                mysql -u $mysql_username -p$mysql_password HW <<EOF
-                DELETE FROM course WHERE course_id=$delete_id;
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM course WHERE course_id=$delete_id;
+            DELETE FROM binding WHERE course_id=$delete_id;
 EOF
-            else
-                Err "Fail to Delete Course" \
-                    "Cannot find a course whose ID is '$delete_id'"
-            fi
             ;;
         *)
             break
             ;;
         esac
-
     done
 }
 
 function ManageTeachingAffairs() {
-    echo "ManageTeachingAffairs"
+    while [ 1 ]; do
+
+        selection=$(echo "SELECT binding.course_id, course.name, binding.teacher_id, teacher.name FROM (binding INNER JOIN course ON binding.course_id=course.course_id) INNER JOIN teacher ON binding.teacher_id=teacher.teacher_id;" | $mysql_default | tr '\t' '\n' | yad --list --title "Course Bindings" \
+            --column "Course ID" --column "Course Name" \
+            --column "Teacher ID" --column "Teacher Name" \
+            $list_size --button="Back:3" --button="Delete:2" --button="Add:1")
+
+        case $? in
+        0)
+            c_id=$(echo "$selection" | cut -d '|' -f 1)
+            c_name=$(echo "$selection" | cut -d '|' -f 2)
+            t_id=$(echo "$selection" | cut -d '|' -f 3)
+            t_name=$(echo "$selection" | cut -d '|' -f 4)
+
+            yad --form --title "Binding Info" \
+                --field="Course ID:RO" "$c_id" \
+                --field="Course Name:RO" "$c_name" \
+                --field="Teacher ID:RO" "$t_id" \
+                --field="Teacher Name:RO" "$t_name"
+            ;;
+        1)
+            form=$(zenity --forms --title "Create Binding" \
+                --text "Create a course binding" \
+                --add-entry "Course ID" \
+                --add-entry "Teacher ID")
+
+            if [ $? -eq 0 ]; then
+                c_id=$(echo "$form" | cut -d '|' -f 1)
+                t_id=$(echo "$form" | cut -d '|' -f 2)
+
+                if [ ${#c_id} -gt 10 ]; then
+                    Err "Fail to Create Binding" "Course ID is too long. Expected under or equal 10 characters."
+                    continue
+                elif [ ${#t_id} -gt 10 ]; then
+                    Err "Fail to Create Course" "Teacher ID is too long. Expected under or equal 10 characters."
+                    continue
+                fi
+
+                if [[ -n $t_id ]] && [[ -n $c_id ]]; then
+
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM course WHERE course_id='$c_id'")
+                    if [ $result -ne 1 ]; then
+                        Err "Fail to Create Binding" "No such course whose ID=$c_id."
+                        continue
+                    fi
+
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM teacher WHERE course_id='$t_id'")
+                    if [ $result -ne 1 ]; then
+                        Err "Fail to Create Binding" "No such teacher account whose ID=$t_id."
+                        continue
+                    fi
+
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM binding WHERE course_id='$c_id' AND teacher_id='$t_id'")
+
+                    if [ $result -eq 0 ]; then
+                        mysql -u $mysql_username -p$mysql_password HW <<EOF
+                        INSERT INTO binding VALUES('$c_id', '$t_id');
+EOF
+                    else
+                        Err "Fail to Create Binding" "There has already been such a binding."
+                    fi
+                else
+                    Err "Fail to Create Binding" "All the entries in the form should be non-empty."
+                fi
+            fi
+            ;;
+
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a binding"
+                continue
+            fi
+            c_id=$(echo "$selection" | cut -d '|' -f 1)
+            t_id=$(echo "$selection" | cut -d '|' -f 3)
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM binding WHERE course_id='$c_id' AND teacher_id='$t_id';
+EOF
+            ;;
+        *)
+            break
+            ;;
+        esac
+    done
 }
 
 function ManageStudentAccounts() {
