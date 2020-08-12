@@ -184,7 +184,7 @@ function ManageTeacherAccounts() {
     while [ 1 ]; do
         selection=$(echo "SELECT * FROM teacher" | $mysql_default |
             tr '\t' '\n' | yad --list --title "Teacher Accounts" \
-            --text "" --column "Teacher ID" --column "Password" \
+            --column "Teacher ID" --column "Password" \
             --column "Name" $list_size --button="Back:3" \
             --button="Add:1" --button="Delete:2" --button="Modify:0")
 
@@ -221,11 +221,28 @@ function ManageTeacherAccounts() {
             new_pass=$(echo "$form" | cut -d '|' -f 2)
             new_name=$(echo "$form" | cut -d '|' -f 3)
 
-            mysql -u $mysql_username -p$mysql_password HW <<EOF
-            UPDATE teacher SET teacher_id='$new_id', password='$new_pass', name='$new_name' WHERE teacher_id='$cur_id';
-EOF
-            ;;
+            if [ ${#new_id} -gt 10 ]; then
+                Err "Fail to Modify Teacher Account" "Teacher ID is too long. Expected under or equal 10 characters."
+                continue
+            elif [ ${#new_pass} -gt 32 ]; then
+                Err "Fail to Modify Teacher Account" "Password is too long. Expected under or equal 32 characters."
+                continue
+            elif [ ${#new_name} -gt 40 ]; then
+                Err "Fail to Modify Teacher Account" "Name is too long. Expected under or equal 40 characters."
+                continue
+            fi
 
+            if [[ -n $new_id ]] && [[ -n $new_pass ]] && [[ -n $new_name ]]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE teacher SET teacher_id='$new_id', password='$new_pass', name='$new_name' WHERE teacher_id='$cur_id';
+EOF
+
+            else
+
+                Err "Fail to Modify Teacher Account" "All the entries in the form should be non-empty."
+
+            fi
+            ;;
         1)
             form=$(zenity --forms --title "Create Teacher Account" \
                 --text "Create a teacher account" \
@@ -279,7 +296,6 @@ EOF
                 mysql -u $mysql_username -p$mysql_password HW <<EOF
                 DELETE FROM teacher WHERE teacher_id=$delete_id;
 EOF
-
             else
                 Err "Fail to Delete Account" \
                     "Cannot find a teacher account whose ID is '$delete_id'"
@@ -289,12 +305,125 @@ EOF
             break
             ;;
         esac
-
     done
 }
 
 function ManageCourses() {
-    echo "ManageCourses"
+    while [ 1 ]; do
+        selection=$(echo "SELECT * FROM course" | $mysql_default |
+            tr '\t' '\n' | yad --list --title "Courses" \
+            --column "Course ID" --column "Name" \
+            $list_size --button="Back:3" --button="Add:1" \
+            --button="Delete:2" --button="Modify:0")
+
+        case $? in
+        0)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a course"
+                continue
+            fi
+
+            cur_id=$(echo "$selection" | cut -d '|' -f 1)
+            cur_name=$(echo "$selection" | cut -d '|' -f 2)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(course_id) FROM course WHERE course_id='$cur_id'")
+
+            if [ $result -ne 1 ]; then
+                Err "Fail to Modify Course" \
+                    "Cannot find a course whose ID is '$cur_id'"
+                continue
+            fi
+
+            form=$(yad --form --title "Modify Course" \
+                --text "Modify a course" \
+                --field="Course ID" "$cur_id" \
+                --field="Name" "$cur_name" $form_size)
+
+            if [ -z $form ]; then
+                continue
+            fi
+
+            new_id=$(echo "$form" | cut -d '|' -f 1)
+            new_name=$(echo "$form" | cut -d '|' -f 2)
+
+            if [ ${#new_id} -gt 10 ]; then
+                Err "Fail to Modify Course" "Course ID is too long. Expected under or equal 10 characters."
+                continue
+            elif [ ${#new_name} -gt 40 ]; then
+                Err "Fail to Modify Course" "Name is too long. Expected under or equal 40 characters."
+                continue
+            fi
+
+            if [[ -n $new_id ]] && [[ -n $new_name ]]; then
+
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE course SET course_id='$new_id', name='$new_name' WHERE course_id='$cur_id';
+EOF
+            else
+
+                Err "Fail to Modify Course" "All the entries in the form should be non-empty."
+
+            fi
+            ;;
+        1)
+            form=$(zenity --forms --title "Create Course" \
+                --text "Create a course account" \
+                --add-entry "Course ID" \
+                --add-entry "Name")
+
+            if [ $? -eq 0 ]; then
+                new_id=$(echo "$form" | cut -d '|' -f 1)
+                new_name=$(echo "$form" | cut -d '|' -f 2)
+
+                if [ ${#new_id} -gt 10 ]; then
+                    Err "Fail to Create Course" "Course ID is too long. Expected under or equal 10 characters."
+                    continue
+                elif [ ${#new_name} -gt 40 ]; then
+                    Err "Fail to Create Course" "Name is too long. Expected under or equal 40 characters."
+                    continue
+                fi
+
+                if [[ -n $new_id ]] && [[ -n $new_name ]]; then
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(course_id) FROM course WHERE course_id='$new_id'")
+
+                    if [ $result -eq 0 ]; then
+                        mysql -u $mysql_username -p$mysql_password HW <<EOF
+                        INSERT INTO course VALUES('$new_id', '$new_name');
+EOF
+                    else
+                        Err "Fail to Create Course" "There has already been a course whose ID=$new_id."
+                    fi
+                else
+                    Err "Fail to Create Course" "All the entries in the form should be non-empty."
+                fi
+            fi
+            ;;
+
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a course"
+                continue
+            fi
+
+            delete_id=$(echo "$selection" | cut -d '|' -f 1)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(course_id) FROM course WHERE course_id='$delete_id'")
+
+            if [ $result -eq 1 ]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                DELETE FROM course WHERE course_id=$delete_id;
+EOF
+            else
+                Err "Fail to Delete Course" \
+                    "Cannot find a course whose ID is '$delete_id'"
+            fi
+            ;;
+        *)
+            break
+            ;;
+        esac
+
+    done
 }
 
 function ManageTeachingAffairs() {
