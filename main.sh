@@ -185,63 +185,82 @@ function DisplayStudentMenu() {
 function ManageTeacherAccounts() {
     while [ 1 ]; do
         selection=$(echo "SELECT * FROM teacher" | $mysql_default |
-            tr '\t' '\n' | zenity --list --title "Teacher Accounts" \
+            tr '\t' '\n' | yad --list --title "Teacher Accounts" \
             --text "" --column "Teacher ID" --column "Password" \
-            --column "Name" $list_size --extra-button "Add" \
-            --extra-button "Modify" --ok-label "Delete")
+            --column "Name" $list_size --button="Back:3" \
+            --button="Add:1" --button="Delete:2" --button="Modify:0")
 
-        if [ $? -eq 1 ]; then
-            if [[ $selection = "Modify" ]]; then
-                echo "modify account"
-            elif [[ $selection = "Add" ]]; then
+        case $? in
+        0)
+            echo "modify"
+            ;;
 
-                form=$(zenity --forms --title "Create Teacher Account" \
-                    --text "Create a teacher account" \
-                    --add-entry "Teacher ID" \
-                    --add-password "Password" \
-                    --add-entry "Name")
+        1)
+            form=$(zenity --forms --title "Create Teacher Account" \
+                --text "Create a teacher account" \
+                --add-entry "Teacher ID" \
+                --add-password "Password" \
+                --add-entry "Name")
 
-                if [ $? -eq 0 ]; then
-                    new_id=$(echo "$form"| cut -d '|' -f 1)
-                    new_pass=$(echo "$form"| cut -d '|' -f 2)
-                    new_name=$(echo "$form"| cut -d '|' -f 3)
+            if [ $? -eq 0 ]; then
+                new_id=$(echo "$form" | cut -d '|' -f 1)
+                new_pass=$(echo "$form" | cut -d '|' -f 2)
+                new_name=$(echo "$form" | cut -d '|' -f 3)
 
-                    if [] || []
-
-                    if [ -n $new_id ] && [ -n $new_pass ] && [ -n $new_name ]; then
-                        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$new_id'")
-
-                        if [ $result -eq 0 ]; then
-                            mysql -u $mysql_username -p$mysql_password HW <<EOF
-                            INSERT INTO teacher VALUES('$new_id', '$new_pass', '$new_name');
-EOF
-                        else
-                            Err "Fail to Create Teacher Account" "There has already been an account whose ID=$new_id"
-                        fi
-                    else
-                        Err "Fail to Create Teacher Account" "All the entries in the form should be non-empty"
-                    fi
+                if [ ${#new_id} -gt 10 ]; then
+                    Err "Fail to Create Teacher Account" "Teacher ID is too long. Expected under or equal 10 characters."
+                    continue
+                elif [ ${#new_pass} -gt 32 ]; then
+                    Err "Fail to Create Teacher Account" "Password is too long. Expected under or equal 32 characters."
+                    continue
+                elif [ ${#new_name} -gt 40 ]; then
+                    Err "Fail to Create Teacher Account" "Name is too long. Expected under or equal 40 characters."
+                    continue
                 fi
-            else
-                break
+
+                if [[ -n $new_id ]] && [[ -n $new_pass ]] && [[ -n $new_name ]]; then
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$new_id'")
+
+                    if [ $result -eq 0 ]; then
+                        mysql -u $mysql_username -p$mysql_password HW <<EOF
+                        INSERT INTO teacher VALUES('$new_id', '$new_pass', '$new_name');
+EOF
+                    else
+                        Err "Fail to Create Teacher Account" "There has already been an account whose ID=$new_id."
+                    fi
+                else
+                    Err "Fail to Create Teacher Account" "All the entries in the form should be non-empty."
+                fi
             fi
-        else
+            ;;
+
+        2)
             if [[ -z $selection ]]; then
                 Err "Wrong selection" "Must select an account"
-            else
-                result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$selection'")
-
-                if [ $result -eq 1 ]; then
-                    mysql -u $mysql_username -p$mysql_password HW <<EOF
-                    DELETE FROM teacher WHERE teacher_id=$selection;
-EOF
-                else
-                    Err "Fail to Delete Account" \
-                        "Cannot find a teacher account whose ID is '$selection'"
-                fi
+                continue
             fi
-        fi
+
+            delete_id=$(echo "$selection" | cut -d '|' -f 1)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(teacher_id) FROM teacher WHERE teacher_id='$delete_id'")
+
+            if [ $result -eq 1 ]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                DELETE FROM teacher WHERE teacher_id=$delete_id;
+EOF
+
+            else
+                Err "Fail to Delete Account" \
+                    "Cannot find a teacher account whose ID is '$delete_id'"
+            fi
+            ;;
+        *)
+            break
+            ;;
+        esac
+
     done
+
 }
 
 function ManageCourses() {
