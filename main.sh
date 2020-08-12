@@ -1,11 +1,9 @@
 #! /bin/bash
 
-# 临时变量声明
 form_size="--height 200 --width 400 "
 error_size=" --height 160 --width 320 "
 list_size=" --height 640 --width 480 "
 
-# 前向函数声明
 function main() {
 
     while [ 1 ]; do
@@ -165,6 +163,7 @@ function DisplayAdminMenu() {
         "Manage Teaching Affairs")
             ManageTeachingAffairs
             ;;
+
         *)
             break
             ;;
@@ -173,7 +172,47 @@ function DisplayAdminMenu() {
 }
 
 function DisplayTeacherMenu() {
-    echo "DisplayTeacherMenu"
+    while [ 1 ]; do
+
+        selection=$(zenity --list --title "Choose Your Operation" \
+            --column "Operation" \
+            "Display & Manage Courses" \
+            "Manage Student Accounts" \
+            "Manage Course Information" \
+            "Manage Homework" \
+            "Display Homework Completion Status" \
+            "* Back")
+
+        if [ $? -eq 1 ]; then
+            break
+        fi
+
+        case $selection in
+        "Display & Manage Courses")
+            ManageTeacherAccounts
+            ;;
+
+        "Manage Student Accounts")
+            ManageCourses
+            ;;
+
+        "Manage Course Information")
+            ManageTeachingAffairs
+            ;;
+
+        "Manage Homework")
+            ManageHomework
+            ;;
+
+        "Display Homework Completion Status")
+            DisplayHomeworkCompletionStatus
+            ;;
+            
+        *)
+            break
+            ;;
+        esac
+    done
 }
 
 function DisplayStudentMenu() {
