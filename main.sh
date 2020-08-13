@@ -3,6 +3,7 @@
 form_size="--height 200 --width 400 "
 error_size=" --height 160 --width 320 "
 list_size=" --height 640 --width 480 "
+menu_size=" --height 280 --width 320"
 
 function main() {
 
@@ -65,6 +66,10 @@ function main() {
 
 }
 
+function Err() {
+    zenity --error --title "$1" $error_size --text "$2"
+}
+
 function Initial() {
     init_file="$PWD/init.sql"
     if [ -e $init_file ]; then
@@ -101,38 +106,29 @@ function LoginAdmin() {
 }
 
 function LoginTeacher() {
-    entry=$(zenity --title "Login As Teacher" --password --username)
 
-    if [ $? -eq 0 ]; then
-        admin_username=$(echo $entry | cut -d'|' -f1)
-        admin_password=$(echo $entry | cut -d'|' -f2)
+    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM teacher WHERE teacher_id='$username' AND password='$password'")
 
-        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(admin_id) FROM admin WHERE admin_id='$admin_username' AND password='$admin_password'")
-
-        if [ $result -eq 1 ]; then
-            echo "successfully login in as teacher"
-        else
-            Err "Fail to Login in as Teacher" \
-                "Wrong matches! Please re-check your username or password"
-        fi
+    if [ $result -eq 1 ]; then
+        echo "successfully login in as teacher."
+        saved_id=$username
+        DisplayTeacherMenu
+    else
+        Err "Fail to Login in as Teacher" \
+            "Wrong matches! Please re-check your username or password"
     fi
 }
 
 function LoginStudent() {
-    entry=$(zenity --title "Login As Student" --password --username)
+    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM student WHERE student_id='$username' AND password='$password'")
 
-    if [ $? -eq 0 ]; then
-        student_username=$(echo $entry | cut -d'|' -f1)
-        student_password=$(echo $entry | cut -d'|' -f2)
-
-        result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(student_id) FROM student WHERE student_id='$student_username' AND password='$student_password'")
-
-        if [ $result -eq 1 ]; then
-            echo "successfully login in as student"
-        else
-            Err "Fail to Login in as Student" \
-                "Wrong matches! Please re-check your username or password"
-        fi
+    if [ $result -eq 1 ]; then
+        echo "successfully login in as student."
+        saved_id=$username
+        DisplayStudentMenu
+    else
+        Err "Fail to Login in as Student" \
+            "Wrong matches! Please re-check your username or password"
     fi
 }
 
@@ -174,7 +170,8 @@ function DisplayAdminMenu() {
 function DisplayTeacherMenu() {
     while [ 1 ]; do
 
-        selection=$(zenity --list --title "Choose Your Operation" \
+        selection=$(zenity --list $menu_size \
+            --title "Choose Your Operation" \
             --column "Operation" \
             "Display & Manage Courses" \
             "Manage Student Accounts" \
@@ -189,15 +186,15 @@ function DisplayTeacherMenu() {
 
         case $selection in
         "Display & Manage Courses")
-            ManageTeacherAccounts
+            DisplayManageCourses
             ;;
 
         "Manage Student Accounts")
-            ManageCourses
+            ManageStudentAccounts
             ;;
 
         "Manage Course Information")
-            ManageTeachingAffairs
+            ManageCourseInformation
             ;;
 
         "Manage Homework")
@@ -207,7 +204,7 @@ function DisplayTeacherMenu() {
         "Display Homework Completion Status")
             DisplayHomeworkCompletionStatus
             ;;
-            
+
         *)
             break
             ;;
@@ -216,7 +213,37 @@ function DisplayTeacherMenu() {
 }
 
 function DisplayStudentMenu() {
-    echo "DisplayTeacherMenu"
+    while [ 1 ]; do
+
+        selection=$(zenity --list $menu_size \
+            --title "Choose Your Operation" \
+            --column "Operation" \
+            "Display Your Courses" \
+            "Display Course Information" \
+            "Display Your Homework" \
+            "* Back")
+
+        if [ $? -eq 1 ]; then
+            break
+        fi
+
+        case $selection in
+        "Display Your Courses")
+            DisplayStudentCourses
+            ;;
+
+        "Display Course Information")
+            DisplayCourseInformation
+            ;;
+
+        "Display Your Homework")
+            DisplayStudentHomework
+            ;;
+        *)
+            break
+            ;;
+        esac
+    done
 }
 
 function ManageTeacherAccounts() {
@@ -438,6 +465,10 @@ EOF
             mysql -u $mysql_username -p$mysql_password HW <<EOF
             DELETE FROM course WHERE course_id=$delete_id;
             DELETE FROM binding WHERE course_id=$delete_id;
+            DELETE FROM election WHERE course_id=$delete_id;
+            DELETE FROM homework WHERE course_id=$delete_id;
+            DELETE FROM homework_handin WHERE course_id=$delete_id;
+            DELETE FROM information WHERE course_id=$delete_id;
 EOF
             ;;
         *)
@@ -535,10 +566,129 @@ EOF
 }
 
 function ManageStudentAccounts() {
-    echo "ManageStudentAccounts"
+    while [ 1 ]; do
+        selection=$(echo "SELECT * FROM student" | $mysql_default |
+            tr '\t' '\n' | yad --list --title "Student Accounts" \
+            --column "Student ID" --column "Password" \
+            --column "Name" $list_size --button="Back:3" \
+            --button="Add:1" --button="Delete:2" --button="Modify:0")
+
+        case $? in
+        0)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select an account"
+                continue
+            fi
+
+            cur_id=$(echo "$selection" | cut -d '|' -f 1)
+            cur_pass=$(echo "$selection" | cut -d '|' -f 2)
+            cur_name=$(echo "$selection" | cut -d '|' -f 3)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM student WHERE student_id='$cur_id'")
+
+            if [ $result -ne 1 ]; then
+                Err "Fail to Modify Account" \
+                    "Cannot find a student account whose ID is '$cur_id'"
+                continue
+            fi
+
+            form=$(yad --form --title "Modify Student Account" \
+                --text "Modify a student account" \
+                --field="Student ID:RO" "$cur_id" \
+                --field="Password" "$cur_pass" \
+                --field="Name" "$cur_name" $form_size)
+
+            if [ -z $form ]; then
+                continue
+            fi
+
+            new_pass=$(echo "$form" | cut -d '|' -f 2)
+            new_name=$(echo "$form" | cut -d '|' -f 3)
+
+            if [ ${#new_pass} -gt 32 ]; then
+                Err "Fail to Modify Student Account" "Password is too long. Expected under or equal 32 characters."
+                continue
+            elif [ ${#new_name} -gt 40 ]; then
+                Err "Fail to Modify Student Account" "Name is too long. Expected under or equal 40 characters."
+                continue
+            fi
+
+            if [[ -n $new_pass ]] && [[ -n $new_name ]]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE student SET password='$new_pass', name='$new_name' WHERE student_id='$cur_id';
+EOF
+
+            else
+                Err "Fail to Modify Student Account" "All the entries in the form should be non-empty."
+            fi
+            ;;
+        1)
+            form=$(zenity --forms --title "Create Student Account" \
+                --text "Create a student account" \
+                --add-entry "Student ID" \
+                --add-password "Password" \
+                --add-entry "Name")
+
+            if [ $? -eq 0 ]; then
+                new_id=$(echo "$form" | cut -d '|' -f 1)
+                new_pass=$(echo "$form" | cut -d '|' -f 2)
+                new_name=$(echo "$form" | cut -d '|' -f 3)
+
+                if [ ${#new_id} -gt 10 ]; then
+                    Err "Fail to Create Student Account" "Student ID is too long. Expected under or equal 10 characters."
+                    continue
+                elif [ ${#new_pass} -gt 32 ]; then
+                    Err "Fail to Create Student Account" "Password is too long. Expected under or equal 32 characters."
+                    continue
+                elif [ ${#new_name} -gt 40 ]; then
+                    Err "Fail to Create Student Account" "Name is too long. Expected under or equal 40 characters."
+                    continue
+                fi
+
+                if [[ -n $new_id ]] && [[ -n $new_pass ]] && [[ -n $new_name ]]; then
+                    result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM student WHERE student_id='$new_id'")
+
+                    if [ $result -eq 0 ]; then
+                        mysql -u $mysql_username -p$mysql_password HW <<EOF
+                        INSERT INTO student VALUES('$new_id', '$new_pass', '$new_name');
+EOF
+                    else
+                        Err "Fail to Create Student Account" "There has already been an account whose ID=$new_id."
+                    fi
+                else
+                    Err "Fail to Create Student Account" "All the entries in the form should be non-empty."
+                fi
+            fi
+            ;;
+
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select an account"
+                continue
+            fi
+
+            delete_id=$(echo "$selection" | cut -d '|' -f 1)
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM student WHERE student_id=$delete_id;
+            DELETE FROM binding WHERE student_id=$delete_id;
+            DELETE FROM election WHERE student_id=$delete_id;
+            DELETE FROM homework_handin WHERE student_id=$delete_id;
+EOF
+            ;;
+        *)
+            break
+            ;;
+        esac
+    done
 }
 
-function ManageInformation() {
+# TODO
+function DisplayManageCourses() {
+    echo "manage courses"
+}
+
+function ManageCourseInformation() {
     echo "ManageInformation"
 }
 
@@ -546,12 +696,22 @@ function ManageHomework() {
     echo "ManageHomework"
 }
 
-function ManageStatus() {
+function DisplayHomeworkCompletionStatus() {
     echo "ManageStatus"
 }
 
-function Err() {
-    zenity --error --title "$1" $error_size --text "$2"
+
+
+function DisplayStudentCourses() {
+
+}
+
+function DisplayCourseInformation() {
+
+}
+
+function DisplayStudentHomework() {
+
 }
 
 # 主函数调用
