@@ -26,3 +26,16 @@ INSERT INTO student VALUES('stu004', 'stu004', 'D');
 INSERT INTO student VALUES('stu005', 'stu005', 'E');
 INSERT INTO student VALUES('stu006', 'stu006', 'F');
 INSERT INTO student VALUES('stu007', 'stu007', 'G');
+
+DELETE FROM election;
+INSERT INTO election VALUES('001', 'stu001');
+INSERT INTO election VALUES('001', 'stu002');
+INSERT INTO election VALUES('001', 'stu003');
+INSERT INTO election VALUES('001', 'stu004');
+INSERT INTO election VALUES('002', 'stu005');
+INSERT INTO election VALUES('002', 'stu006');
+INSERT INTO election VALUES('002', 'stu007');
+
+DELETE FROM information;
+INSERT INTO information VALUES('001', NOW(), 'Hello Linux', 'This is a piece of information about Linux course');
+INSERT INTO information VALUES('002', NOW(), 'Using MySQL', 'This project is completed with MySQL');

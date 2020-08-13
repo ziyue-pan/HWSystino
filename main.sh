@@ -4,6 +4,7 @@ form_size="--height 200 --width 400 "
 error_size=" --height 160 --width 320 "
 list_size=" --height 640 --width 480 "
 menu_size=" --height 280 --width 320"
+info_size=" --height 640 --width 640 "
 
 function main() {
 
@@ -38,7 +39,7 @@ function main() {
             $form_size --field="Username" --field="Password:H" \
             --field="Identity:CB" '' '' 'Administrator!Teacher!Student')
 
-        if [ -z $form ]; then
+        if [[ -z $form ]]; then
             break
         fi
 
@@ -279,7 +280,7 @@ function ManageTeacherAccounts() {
                 --field="Password" "$cur_pass" \
                 --field="Name" "$cur_name" $form_size)
 
-            if [ -z $form ]; then
+            if [[ -z $form ]]; then
                 continue
             fi
 
@@ -394,7 +395,7 @@ function ManageCourses() {
                 --field="Course ID:RO" "$cur_id" \
                 --field="Name" "$cur_name" $form_size)
 
-            if [ -z $form ]; then
+            if [[ -z $form ]]; then
                 continue
             fi
 
@@ -598,7 +599,7 @@ function ManageStudentAccounts() {
                 --field="Password" "$cur_pass" \
                 --field="Name" "$cur_name" $form_size)
 
-            if [ -z $form ]; then
+            if [[ -z $form ]]; then
                 continue
             fi
 
@@ -683,20 +684,18 @@ EOF
     done
 }
 
-# TODO
 function DisplayManageCourses() {
     while [ 1 ]; do
         selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id='$saved_id'" |
             $mysql_default | tr '\t' '\n' | yad --list --title "Courses" --column "Course ID" --column "Name" \
             $list_size --button="Back:1" --button="Manage Elections:0")
         if [ $? -eq 0 ]; then
-            if [ -z $selection ]; then
+            if [[ -z $selection ]]; then
                 Err "Wrong selection" "Must select a course."
                 continue
             fi
             course_id=$(echo "$selection" | cut -d '|' -f 1)
             ManageElection
-
         else
             break
         fi
@@ -741,7 +740,7 @@ EOF
 
             ;;
         2)
-            if [ -z $selection ]; then
+            if [[ -z $selection ]]; then
                 Err "Wrong selection" "Must select a student"
                 continue
             fi
@@ -760,9 +759,85 @@ EOF
 }
 
 function ManageCourseInformation() {
-    echo "ManageInformation"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name, create_time, title FROM (information NATURAL JOIN course) WHERE course_id IN (SELECT course_id FROM binding WHERE teacher_id=$saved_id);" | $mysql_default | tr '\t' '\n' | yad --list --title "Course Information" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:3" --button="Delete:2" --button="Add:1" --button="Modify:0")
+
+        case $? in
+        0)
+
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a piece of information"
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            name=$(echo "$selection" | cut -d '|' -f 2)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            title=$(echo "$selection" | cut -d '|' -f 4)
+            content=$(echo "SELECT description FROM information WHERE course_id='$course_id' AND create_time='$create_time'" | $mysql_default)
+
+            form=$(yad --form --title "Display & Modify Course Information" \
+                --text "Modify a piece of course information" \
+                --field="Course ID:RO" "$course_id" \
+                --field="Course Name:RO" "$name" \
+                --field="Create Time:RO" "$create_time" \
+                --field="Title" "$title" \
+                --field="Content:TXT" "$content" $form_size)
+
+            if [ $? -eq 0 ]; then
+                new_title=$(echo "$form" | cut -d '|' -f 4)
+                new_content=$(echo "$form" | cut -d '|' -f 5)
+
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE information SET title='$new_title', description='$new_content' WHERE course_id='$course_id' AND create_time='$create_time';
+EOF
+            fi
+            ;;
+        1)
+            form=$(yad --form --title "Add Course Information" \
+                --text "Add a piece of course information" \
+                --field="Course ID" \
+                --field="Title" \
+                --field="Content:TXT" $form_size)
+
+            if [ $? -ne 0 ]; then
+                continue
+            fi
+
+            c_id=$(echo "$form" | cut -d '|' -f 1)
+            title=$(echo "$form" | cut -d '|' -f 2)
+            content=$(echo "$form" | cut -d '|' -f 3)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM course WHERE course_id='$c_id'")
+            if [ $result -eq 0 ]; then
+                Err "Fail to Add Information" "No such course whose ID=$c_id."
+                continue
+            fi
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM binding WHERE course_id='$c_id' AND teacher_id='$saved_id'")
+            if [ $result -eq 0 ]; then
+                Err "Fail to Add Information" "You have no privilege to add information to this course."
+                continue
+            fi
+
+            if [ ${#title} -gt 40 ]; then
+                Err "Fail to Add Information" "Title is too long. Expected under or equal 40 characters."
+                continue
+            fi
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            INSERT INTO information VALUES('$c_id', NOW(), '$title', '$content');
+EOF
+            ;;
+
+        *)
+            break
+            ;;
+        esac
+    done
 }
 
+# TODO
 function ManageHomework() {
     echo "ManageHomework"
 }
