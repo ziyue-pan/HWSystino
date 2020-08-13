@@ -685,7 +685,58 @@ EOF
 
 # TODO
 function DisplayManageCourses() {
-    echo "manage courses"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id=$saved_id" |
+            $mysql_default | tr '\t' '\n' | yad --list --title "Courses" --column "Course ID" --column "Name" \
+            $list_size --button="Back:1" --button="Manage Elections:0")
+        if [ $? -eq 0 ]; then
+            if [ -z $selection ]; then
+                Err "Wrong selection" "Must select a course"
+                continue
+            fi
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            ManageElection
+
+        else
+            break
+        fi
+    done
+}
+
+function ManageElection() {
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id=$saved_id" |
+            $mysql_default | tr '\t' '\n' | yad --list --title "Elections" --column "Student ID" --column "Name" \
+            $list_size --button="Back:3" --button="Delete:2" --button="Add:1")
+        case $? in
+        0)
+            continue
+            ;;
+        1)
+            stu_id=$(zenity --forms --title "Add a Student" \
+                --text "Add a student in this course" \
+                --add-entry "Student ID")
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM student WHERE student_id='$stu_id'")
+            if [ $result -eq 1 ]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                INSERT INTO election VALUES($course_id, $stu_id);
+                INSERT INTO homework_handin (
+                    SELECT course_id, student_id, create_time, FALSE, NULL
+                        FROM ( (SELECT course_id, create_time FROM homework WHERE course_id=$course_id)
+                            LEFT JOIN election ON course_id=election.course_id));
+EOF
+            else
+                Err "Fail to Add Student" "There is no student whose ID=$stu_id."
+            fi
+            ;;
+        2) ;;
+
+        3)
+            break
+            ;;
+        esac
+    done
 }
 
 function ManageCourseInformation() {
@@ -700,18 +751,16 @@ function DisplayHomeworkCompletionStatus() {
     echo "ManageStatus"
 }
 
-
-
 function DisplayStudentCourses() {
-
+    echo "DisplayStudentCourses"
 }
 
 function DisplayCourseInformation() {
-
+    echo "DisplayCourseInformation"
 }
 
 function DisplayStudentHomework() {
-
+    echo "DisplayStudentHomework"
 }
 
 # 主函数调用

@@ -21,9 +21,8 @@ CREATE TABLE IF NOT EXISTS student (
 );
 
 CREATE TABLE IF NOT EXISTS course (
-    course_id   CHAR(10),
-    name        VARCHAR(40),
-    PRIMARY KEY (course_id)
+    course_id   CHAR(10) PRIMARY KEY,
+    name        VARCHAR(40)
 );
 
 CREATE TABLE IF NOT EXISTS binding (
