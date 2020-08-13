@@ -352,8 +352,8 @@ EOF
             delete_id=$(echo "$selection" | cut -d '|' -f 1)
 
             mysql -u $mysql_username -p$mysql_password HW <<EOF
-            DELETE FROM teacher WHERE teacher_id=$delete_id;
-            DELETE FROM binding WHERE teacher_id=$delete_id;
+            DELETE FROM teacher WHERE teacher_id='$delete_id';
+            DELETE FROM binding WHERE teacher_id='$delete_id';
 EOF
             ;;
         *)
@@ -463,12 +463,12 @@ EOF
             delete_id=$(echo "$selection" | cut -d '|' -f 1)
 
             mysql -u $mysql_username -p$mysql_password HW <<EOF
-            DELETE FROM course WHERE course_id=$delete_id;
-            DELETE FROM binding WHERE course_id=$delete_id;
-            DELETE FROM election WHERE course_id=$delete_id;
-            DELETE FROM homework WHERE course_id=$delete_id;
-            DELETE FROM homework_handin WHERE course_id=$delete_id;
-            DELETE FROM information WHERE course_id=$delete_id;
+            DELETE FROM course WHERE course_id='$delete_id';
+            DELETE FROM binding WHERE course_id='$delete_id';
+            DELETE FROM election WHERE course_id='$delete_id';
+            DELETE FROM homework WHERE course_id='$delete_id';
+            DELETE FROM homework_handin WHERE course_id='$delete_id';
+            DELETE FROM information WHERE course_id='$delete_id';
 EOF
             ;;
         *)
@@ -670,10 +670,10 @@ EOF
             delete_id=$(echo "$selection" | cut -d '|' -f 1)
 
             mysql -u $mysql_username -p$mysql_password HW <<EOF
-            DELETE FROM student WHERE student_id=$delete_id;
-            DELETE FROM binding WHERE student_id=$delete_id;
-            DELETE FROM election WHERE student_id=$delete_id;
-            DELETE FROM homework_handin WHERE student_id=$delete_id;
+            DELETE FROM student WHERE student_id='$delete_id';
+            DELETE FROM binding WHERE student_id='$delete_id';
+            DELETE FROM election WHERE student_id='$delete_id';
+            DELETE FROM homework_handin WHERE student_id='$delete_id';
 EOF
             ;;
         *)
@@ -686,12 +686,12 @@ EOF
 # TODO
 function DisplayManageCourses() {
     while [ 1 ]; do
-        selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id=$saved_id" |
+        selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id='$saved_id'" |
             $mysql_default | tr '\t' '\n' | yad --list --title "Courses" --column "Course ID" --column "Name" \
             $list_size --button="Back:1" --button="Manage Elections:0")
         if [ $? -eq 0 ]; then
             if [ -z $selection ]; then
-                Err "Wrong selection" "Must select a course"
+                Err "Wrong selection" "Must select a course."
                 continue
             fi
             course_id=$(echo "$selection" | cut -d '|' -f 1)
@@ -705,7 +705,7 @@ function DisplayManageCourses() {
 
 function ManageElection() {
     while [ 1 ]; do
-        selection=$(echo "SELECT course_id, name FROM course NATURAL JOIN binding WHERE teacher_id=$saved_id" |
+        selection=$(echo "SELECT student_id, name FROM student NATURAL JOIN election WHERE course_id='$course_id'" |
             $mysql_default | tr '\t' '\n' | yad --list --title "Elections" --column "Student ID" --column "Name" \
             $list_size --button="Back:3" --button="Delete:2" --button="Add:1")
         case $? in
@@ -716,23 +716,43 @@ function ManageElection() {
             stu_id=$(zenity --forms --title "Add a Student" \
                 --text "Add a student in this course" \
                 --add-entry "Student ID")
+            if [ $? -ne 0 ]; then
+                continue
+            fi
 
             result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM student WHERE student_id='$stu_id'")
-            if [ $result -eq 1 ]; then
-                mysql -u $mysql_username -p$mysql_password HW <<EOF
-                INSERT INTO election VALUES($course_id, $stu_id);
-                INSERT INTO homework_handin (
-                    SELECT course_id, student_id, create_time, FALSE, NULL
-                        FROM ( (SELECT course_id, create_time FROM homework WHERE course_id=$course_id)
-                            LEFT JOIN election ON course_id=election.course_id));
-EOF
-            else
+            if [ $result -ne 1 ]; then
                 Err "Fail to Add Student" "There is no student whose ID=$stu_id."
+                continue
             fi
-            ;;
-        2) ;;
 
-        3)
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM election WHERE student_id='$stu_id' AND course_id='$course_id'")
+            if [ $result -ne 0 ]; then
+                Err "Fail to Add Student" "This student has already taken this course."
+                continue
+            fi
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            INSERT INTO election VALUES('$course_id', '$stu_id');
+            INSERT INTO homework_handin (course_id, student_id, create_time, complete, content)
+                SELECT '$course_id', '$stu_id', C.create_time, FALSE, NULL
+                    FROM  (SELECT create_time FROM homework WHERE course_id='$course_id') AS C;
+EOF
+
+            ;;
+        2)
+            if [ -z $selection ]; then
+                Err "Wrong selection" "Must select a student"
+                continue
+            fi
+
+            stu_id=$(echo "$selection" | cut -d '|' -f 1)
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM election WHERE course_id='$course_id' AND student_id='$stu_id';
+            DELETE FROM homework_handin WHERE course_id='$course_id' AND student_id='$stu_id';
+EOF
+            ;;
+        *)
             break
             ;;
         esac
