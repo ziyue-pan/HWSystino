@@ -672,7 +672,6 @@ EOF
 
             mysql -u $mysql_username -p$mysql_password HW <<EOF
             DELETE FROM student WHERE student_id='$delete_id';
-            DELETE FROM binding WHERE student_id='$delete_id';
             DELETE FROM election WHERE student_id='$delete_id';
             DELETE FROM homework_handin WHERE student_id='$delete_id';
 EOF
@@ -823,10 +822,26 @@ EOF
             if [ ${#title} -gt 40 ]; then
                 Err "Fail to Add Information" "Title is too long. Expected under or equal 40 characters."
                 continue
+            elif [[ -z $title ]]; then
+                Err "Fail to Add Information" "Title cannot be empty."
+                continue
             fi
 
             mysql -u $mysql_username -p$mysql_password HW <<EOF
             INSERT INTO information VALUES('$c_id', NOW(), '$title', '$content');
+EOF
+            ;;
+
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a piece of information"
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM information WHERE course_id='$course_id' AND create_time='$create_time';
 EOF
             ;;
 
@@ -839,7 +854,99 @@ EOF
 
 # TODO
 function ManageHomework() {
-    echo "ManageHomework"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name, create_time, title FROM (homework NATURAL JOIN course) WHERE course_id IN (SELECT course_id FROM binding WHERE teacher_id=$saved_id);" | $mysql_default | tr '\t' '\n' | yad --list --title "Homework" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:3" --button="Delete:2" --button="Add:1" --button="Modify:0")
+        case $? in
+        0)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a homework"
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            name=$(echo "$selection" | cut -d '|' -f 2)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            title=$(echo "$selection" | cut -d '|' -f 4)
+            content=$(echo "SELECT description FROM homework WHERE course_id='$course_id' AND create_time='$create_time'" | $mysql_default)
+            form=$(yad --form --title "Display & Modify Homework" \
+                --text "Modify a homework" \
+                --field="Course ID:RO" "$course_id" \
+                --field="Course Name:RO" "$name" \
+                --field="Create Time:RO" "$create_time" \
+                --field="Title" "$title" \
+                --field="Content:TXT" "$content" $form_size)
+
+            if [ $? -eq 0 ]; then
+                new_title=$(echo "$form" | cut -d '|' -f 4)
+                new_content=$(echo "$form" | cut -d '|' -f 5)
+
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE homework SET title='$new_title', description='$new_content' WHERE course_id='$course_id' AND create_time='$create_time';
+EOF
+            fi
+            ;;
+        1)
+            form=$(yad --form --title "Add Homework" \
+                --text "Add a homework" \
+                --field="Course ID" \
+                --field="Title" \
+                --field="Content:TXT" $form_size)
+
+            if [ $? -ne 0 ]; then
+                continue
+            fi
+
+            c_id=$(echo "$form" | cut -d '|' -f 1)
+            title=$(echo "$form" | cut -d '|' -f 2)
+            content=$(echo "$form" | cut -d '|' -f 3)
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM course WHERE course_id='$c_id'")
+            if [ $result -eq 0 ]; then
+                Err "Fail to Add Homework" "No such course whose ID=$c_id."
+                continue
+            fi
+
+            result=$(mysql -s -N HW $mysql_info <<<"SELECT COUNT(*) FROM binding WHERE course_id='$c_id' AND teacher_id='$saved_id'")
+            if [ $result -eq 0 ]; then
+                Err "Fail to Add Homework" "You have no privilege to add information to this course."
+                continue
+            fi
+
+            if [ ${#title} -gt 40 ]; then
+                Err "Fail to Add Homework" "Title is too long. Expected under or equal 40 characters."
+                continue
+            elif [[ -z $title ]]; then
+                Err "Fail to Add Homework" "Title cannot be empty."
+                continue
+            fi
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            SET @time := NOW();
+            INSERT INTO homework VALUES('$c_id', @time, '$title', '$content');
+            INSERT INTO homework_handin (course_id, student_id, create_time, complete, content)
+                SELECT '$c_id', student_id, @time, FALSE, NULL FROM election WHERE course_id='$c_id';
+EOF
+            ;;
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a homework"
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            DELETE FROM homework WHERE course_id='$course_id' AND create_time='$create_time';
+            DELETE FROM homework_handin WHERE course_id='$course_id' AND create_time='$create_time';
+EOF
+            ;;
+
+        *)
+            break
+            ;;
+        esac
+
+    done
 }
 
 function DisplayHomeworkCompletionStatus() {

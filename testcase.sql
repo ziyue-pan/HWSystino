@@ -39,3 +39,6 @@ INSERT INTO election VALUES('002', 'stu007');
 DELETE FROM information;
 INSERT INTO information VALUES('001', NOW(), 'Hello Linux', 'This is a piece of information about Linux course');
 INSERT INTO information VALUES('002', NOW(), 'Using MySQL', 'This project is completed with MySQL');
+INSERT INTO information VALUES('002', NOW(), 'How to use', 'Please follow your heart');
+
+DELETE FROM homework;
