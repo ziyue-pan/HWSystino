@@ -1023,9 +1023,50 @@ function DisplayCourseInformation() {
 
 }
 
-# TODO
 function DisplayStudentHomework() {
-    echo "DisplayStudentHomework"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name, create_time, title, IF(complete, 'TRUE', 'FALSE') FROM (homework_handin NATURAL JOIN course) NATURAL JOIN homework WHERE student_id='$saved_id';" | $mysql_default | tr '\t' '\n' | yad --list $info_size --title "Homework" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" --column "Complete?" --button="Back:3" --button="Delete:2" --button="Modify:0")
+
+        case $? in
+
+        0)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a homework."
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            content=$(echo "SELECT content FROM homework_handin WHERE course_id='$course_id' AND create_time='$create_time' AND student_id='$saved_id'" | $mysql_default)
+
+            form=$(yad --form --title "Edit Your Homework" --field="Content:TXT" "$content" $form_size)
+
+            if [ $? -eq 0 ]; then
+                mysql -u $mysql_username -p$mysql_password HW <<EOF
+                UPDATE homework_handin SET content='$form', complete=TRUE WHERE course_id='$course_id' AND create_time='$create_time' AND student_id='$saved_id';
+EOF
+            fi
+            ;;
+
+        2)
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a homework."
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+
+            mysql -u $mysql_username -p$mysql_password HW <<EOF
+            UPDATE homework_handin SET content=NULL, complete=FALSE WHERE course_id='$course_id' AND create_time='$create_time' AND student_id='$saved_id';
+EOF
+            ;;
+        *)
+            break
+            ;;
+
+        esac
+    done
 }
 
 # 主函数调用
