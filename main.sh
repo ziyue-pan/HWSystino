@@ -852,10 +852,10 @@ EOF
     done
 }
 
-# TODO
 function ManageHomework() {
     while [ 1 ]; do
-        selection=$(echo "SELECT course_id, name, create_time, title FROM (homework NATURAL JOIN course) WHERE course_id IN (SELECT course_id FROM binding WHERE teacher_id=$saved_id);" | $mysql_default | tr '\t' '\n' | yad --list --title "Homework" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:3" --button="Delete:2" --button="Add:1" --button="Modify:0")
+        selection=$(echo "SELECT course_id, name, create_time, title FROM (homework NATURAL JOIN course) WHERE course_id IN (SELECT course_id FROM binding WHERE teacher_id='$saved_id');" | $mysql_default | tr '\t' '\n' | yad --list --title "Homework" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:3" --button="Delete:2" --button="Add:1" --button="Modify:0")
+
         case $? in
         0)
             if [[ -z $selection ]]; then
@@ -945,22 +945,62 @@ EOF
             break
             ;;
         esac
-
     done
 }
 
 function DisplayHomeworkCompletionStatus() {
-    echo "ManageStatus"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name, create_time, title FROM (homework NATURAL JOIN course) WHERE course_id IN (SELECT course_id FROM binding WHERE teacher_id='$saved_id');" | $mysql_default | tr '\t' '\n' | yad --list --title "Homework" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:1" --button="Inspect:0")
+
+        if [ $? -eq 0 ]; then
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a homework"
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+
+            while [ 1 ]; do
+                selection=$(echo "SELECT student_id, name, IF(complete, 'TRUE', 'FALSE') FROM (homework_handin NATURAL JOIN student) WHERE course_id='$course_id' AND create_time='$create_time';" | $mysql_default | tr '\t' '\n' | yad --list --title "Homework" --column "Student ID" --column "Name" --column "Status" $info_size --button="Back:1" --button="Inspect:0")
+
+                if [ $? -eq 0 ]; then
+                    if [[ -z $selection ]]; then
+                        Err "Wrong selection" "Must select a homework record"
+                        continue
+                    fi
+
+                    stu_id=$(echo "$selection" | cut -d '|' -f 1)
+                    name=$(echo "$selection" | cut -d '|' -f 2)
+                    status=$(echo "$selection" | cut -d '|' -f 3)
+                    content=$(echo "SELECT content FROM homework_handin WHERE course_id='$course_id' AND create_time='$create_time' AND student_id='$stu_id'" | $mysql_default)
+
+                    yad --form --title "Display Homework Content" \
+                        --field="Student ID:RO" "$stu_id" \
+                        --field="Student Name:RO" "$name" \
+                        --field="Complete?:RO" "$status" \
+                        --field="Content:RO" "$content" $form_size
+                else
+                    break
+                fi
+            done
+
+        else
+            break
+        fi
+    done
 }
 
 function DisplayStudentCourses() {
-    echo "DisplayStudentCourses"
+    echo "SELECT course_id, name FROM election NATURAL JOIN course WHERE student_id='$saved_id';" | $mysql_default | tr '\t' '\n' | yad --list --title "Selected Courses" --column "Course ID" --column "Course Name" $list_size --button="Back:0" --no-selection
 }
+
 
 function DisplayCourseInformation() {
     echo "DisplayCourseInformation"
 }
 
+# TODO
 function DisplayStudentHomework() {
     echo "DisplayStudentHomework"
 }
