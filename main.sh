@@ -995,9 +995,32 @@ function DisplayStudentCourses() {
     echo "SELECT course_id, name FROM election NATURAL JOIN course WHERE student_id='$saved_id';" | $mysql_default | tr '\t' '\n' | yad --list --title "Selected Courses" --column "Course ID" --column "Course Name" $list_size --button="Back:0" --no-selection
 }
 
-
 function DisplayCourseInformation() {
-    echo "DisplayCourseInformation"
+    while [ 1 ]; do
+        selection=$(echo "SELECT course_id, name, create_time, title FROM information NATURAL JOIN course WHERE course_id IN (SELECT course_id FROM election WHERE student_id='$saved_id');" | $mysql_default | tr '\t' '\n' | yad --list --title "Course Information" --column "Course ID" --column "Course Name" --column "Create Time" --column "Title" $info_size --button="Back:1" --button="Inspect:0")
+
+        if [ $? -eq 0 ]; then
+            if [[ -z $selection ]]; then
+                Err "Wrong selection" "Must select a piece of information."
+                continue
+            fi
+
+            course_id=$(echo "$selection" | cut -d '|' -f 1)
+            name=$(echo "$selection" | cut -d '|' -f 2)
+            create_time=$(echo "$selection" | cut -d '|' -f 3)
+            content=$(echo "SELECT description FROM information WHERE course_id='$course_id' AND create_time='$create_time'" | $mysql_default)
+
+            yad --form --title "Display Course Information" \
+                --field="Course ID:RO" "$course_id" \
+                --field="Course Name:RO" "$name" \
+                --field="Create Time:RO" "$create_time" \
+                --field="Content:RO" "$content" $form_size
+        else
+
+            break
+        fi
+    done
+
 }
 
 # TODO

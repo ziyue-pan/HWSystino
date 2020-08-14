@@ -1,55 +1,7 @@
 # HWSystino
- homework management system working with zenity & MySQL
 
+homework management system completed by zenity, yad & MySQL
 
-管理员:
+## How to use
 
-    创建教师账号
-    修改教师账号
-    删除教师账号
-    显示教师账号
-    
-    创建课程
-    修改课程
-    删除课程
-    创建课程与教师的绑定
-    删除课程与教师的绑定
-    
-    
-教师:
-
-    查看任教课程
-    为课程添加或删除学生
-    
-    导入学生账户
-    创建学生账户
-    修改学生账户
-    删除学生账户
-    查找学生账户
-    
-    创建课程信息
-    编辑课程信息
-    删除课程信息
-    显示课程信息
-    
-    创建作业
-    编辑作业
-    删除作业
-    显示作业
-    
-    查找学生完成作业情况
-    打印学生完成作业情况（查找全部）
-
-
-学生:
-
-    显示课程
-    
-    编辑作业
-    删除作业
-    查询所有作业完成情况
-    
-    查看课程信息
-
-    
-
+Follow your heart. (May be specified later)
